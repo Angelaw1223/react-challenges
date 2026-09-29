@@ -1,38 +1,23 @@
-const schedules = {
-  'CS-2018-2019': {
-    title: 'CS Courses for 2018-2019',
-    courses: {
-      F101: {
-        term: 'Fall',
-        number: '101',
-        meets: 'MWF 11:00-11:50',
-        title: 'Computer Science: Concepts, Philosophy, and Connections',
-      },
-      F110: {
-        term: 'Fall',
-        number: '110',
-        meets: 'MWF 10:00-10:50',
-        title: 'Intro Programming for non-majors',
-      },
-      S313: {
-        term: 'Spring',
-        number: '313',
-        meets: 'TuTh 15:30-16:50',
-        title: 'Tangible Interaction Design and Learning',
-      },
-      S314: {
-        term: 'Spring',
-        number: '314',
-        meets: 'TuTh 9:30-10:50',
-        title: 'Tech & Human Interaction',
-      },
-    },
-  },
+import useJsonQuery from './utilities/useJsonQuery';
+
+type Course = {
+  term: string;
+  number: string;
+  meets: string;
+  title: string;
 };
 
-const schedule = schedules['CS-2018-2019'];
+type Schedule = {
+  title: string;
+  courses: Record<string, Course>;
+};
 
-type Course = (typeof schedule.courses)[keyof typeof schedule.courses];
+type ScheduleData = {
+  schedules: Record<string, Schedule>;
+};
+
+const dataUrl =
+  'https://courses.cs.northwestern.edu/394/guides/data/cs-courses-firestore.php';
 
 const CourseCard = ({ course }: { course: Course }) => (
   <li className="flex min-h-52 flex-col rounded-lg border border-gray-300 p-4 shadow-sm">
@@ -46,15 +31,37 @@ const CourseCard = ({ course }: { course: Course }) => (
   </li>
 );
 
-const App = () => (
-  <main className="mx-auto max-w-7xl p-4 font-sans">
-    <h1 className="mb-5 text-3xl font-bold">{schedule.title}</h1>
-    <ul className="grid grid-cols-[repeat(auto-fill,_minmax(12rem,_1fr))] items-stretch gap-3">
-      {Object.entries(schedule.courses).map(([courseId, course]) => (
-        <CourseCard key={courseId} course={course} />
-      ))}
-    </ul>
-  </main>
-);
+const App = () => {
+  const { data, loading, error } = useJsonQuery<ScheduleData>(dataUrl);
+
+  if (loading) {
+    return <main className="p-4 font-sans">Loading courses...</main>;
+  }
+
+  if (error) {
+    return (
+      <main className="p-4 font-sans">
+        Unable to load courses: {error.message}
+      </main>
+    );
+  }
+
+  const schedule = data?.schedules['CS-2018-2019'];
+
+  if (!schedule) {
+    return <main className="p-4 font-sans">Course schedule not found.</main>;
+  }
+
+  return (
+    <main className="mx-auto max-w-7xl p-4 font-sans">
+      <h1 className="mb-5 text-3xl font-bold">{schedule.title}</h1>
+      <ul className="grid grid-cols-[repeat(auto-fill,_minmax(12rem,_1fr))] items-stretch gap-3">
+        {Object.entries(schedule.courses).map(([courseId, course]) => (
+          <CourseCard key={courseId} course={course} />
+        ))}
+      </ul>
+    </main>
+  );
+};
 
 export default App;
