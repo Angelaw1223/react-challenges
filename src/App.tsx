@@ -23,15 +23,52 @@ type ScheduleData = {
 const dataUrl =
   'https://courses.cs.northwestern.edu/394/guides/data/cs-courses-firestore.php';
 
-const CourseCard = ({ course }: { course: Course }) => (
-  <li className="flex min-h-52 flex-col rounded-lg border border-gray-300 p-4 shadow-sm">
-    <h2 className="text-xl font-medium">
-      {course.term} CS {course.number}
-    </h2>
-    <p className="mt-2 grow text-base">{course.title}</p>
-    <p className="mt-4 border-t border-gray-300 pt-3 text-sm">
-      {course.meets}
-    </p>
+type CourseCardProps = {
+  courseId: string;
+  course: Course;
+  selected: boolean;
+  toggleCourse: (courseId: string) => void;
+};
+
+const CourseCard = ({
+  courseId,
+  course,
+  selected,
+  toggleCourse,
+}: CourseCardProps) => (
+  <li className="min-h-52">
+    <button
+      type="button"
+      data-course-id={courseId}
+      aria-pressed={selected}
+      aria-label={
+        (selected ? 'Unselect ' : 'Select ') +
+        course.term +
+        ' CS ' +
+        course.number
+      }
+      className={
+        selected
+          ? 'flex h-full w-full flex-col rounded-lg border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-sm'
+          : 'flex h-full w-full flex-col rounded-lg border border-gray-300 p-4 text-left shadow-sm hover:border-blue-400 hover:bg-gray-50'
+      }
+      onClick={() => toggleCourse(courseId)}
+    >
+      <div className="flex w-full items-start justify-between gap-2">
+        <h2 className="text-xl font-medium">
+          {course.term} CS {course.number}
+        </h2>
+        {selected && (
+          <span className="rounded-full bg-blue-700 px-2 py-1 text-xs font-medium text-white">
+            Selected
+          </span>
+        )}
+      </div>
+      <p className="mt-2 grow text-base">{course.title}</p>
+      <p className="mt-4 w-full border-t border-gray-300 pt-3 text-sm">
+        {course.meets}
+      </p>
+    </button>
   </li>
 );
 
@@ -70,20 +107,42 @@ const TermSelector = ({
 type CourseListProps = {
   courses: Record<string, Course>;
   selectedTerm: Term;
+  selectedCourseIds: string[];
+  toggleCourse: (courseId: string) => void;
 };
 
-const CourseList = ({ courses, selectedTerm }: CourseListProps) => (
+const CourseList = ({
+  courses,
+  selectedTerm,
+  selectedCourseIds,
+  toggleCourse,
+}: CourseListProps) => (
   <ul className="grid grid-cols-[repeat(auto-fill,_minmax(12rem,_1fr))] items-stretch gap-3">
     {Object.entries(courses)
       .filter(([, course]) => course.term === selectedTerm)
       .map(([courseId, course]) => (
-        <CourseCard key={courseId} course={course} />
+        <CourseCard
+          key={courseId}
+          courseId={courseId}
+          course={course}
+          selected={selectedCourseIds.includes(courseId)}
+          toggleCourse={toggleCourse}
+        />
       ))}
   </ul>
 );
 
 const TermPage = ({ schedule }: { schedule: Schedule }) => {
   const [selectedTerm, setSelectedTerm] = useState<Term>('Fall');
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+
+  const toggleCourse = (courseId: string) => {
+    setSelectedCourseIds((currentIds) =>
+      currentIds.includes(courseId)
+        ? currentIds.filter((id) => id !== courseId)
+        : [...currentIds, courseId],
+    );
+  };
 
   return (
     <main className="mx-auto max-w-7xl p-4 font-sans">
@@ -95,6 +154,8 @@ const TermPage = ({ schedule }: { schedule: Schedule }) => {
       <CourseList
         courses={schedule.courses}
         selectedTerm={selectedTerm}
+        selectedCourseIds={selectedCourseIds}
+        toggleCourse={toggleCourse}
       />
     </main>
   );
