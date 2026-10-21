@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { signInWithGoogle, signOutUser } from './firebase';
+import useAdminStatus from './utilities/useAdminStatus';
 import useAuthState from './utilities/useAuthState';
 import useFirestoreDocument from './utilities/useFirestoreDocument';
 
@@ -15,6 +16,7 @@ vi.mock('./firebase', () => ({
   signOutUser: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('./utilities/useAuthState', () => ({ default: vi.fn() }));
+vi.mock('./utilities/useAdminStatus', () => ({ default: vi.fn() }));
 vi.mock('./utilities/useFirestoreDocument', () => ({ default: vi.fn() }));
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({ path: 'schedules/CS-2018-2019' })),
@@ -29,6 +31,7 @@ const renderApp = (initialEntries = ['/']) =>
   );
 
 const signedInUser = {
+  uid: 'admin-user',
   displayName: 'Angela Wan',
   email: 'angela.wan1223@gmail.com',
 } as User;
@@ -61,6 +64,11 @@ beforeEach(() => {
     user: signedInUser,
     loading: false,
   });
+  vi.mocked(useAdminStatus).mockReturnValue({
+    isAdmin: true,
+    loading: false,
+    error: null,
+  });
   vi.mocked(useFirestoreDocument).mockReturnValue({
     data: scheduleData.schedules['CS-2018-2019'],
     loading: false,
@@ -83,13 +91,29 @@ describe('authentication', () => {
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalledOnce());
   });
 
-  it('shows editing and sign out to an authenticated user', async () => {
+  it('shows editing to an authenticated administrator', async () => {
+    renderApp();
+
+    expect(
+      await screen.findByText('Welcome, Angela Wan (Administrator)'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Edit Fall CS 101' }),
+    ).toBeInTheDocument();
+  });
+
+  it('lets a signed-in non-administrator sign out but not edit', async () => {
+    vi.mocked(useAdminStatus).mockReturnValue({
+      isAdmin: false,
+      loading: false,
+      error: null,
+    });
     renderApp();
 
     expect(await screen.findByText('Welcome, Angela Wan')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Edit Fall CS 101' }),
-    ).toBeInTheDocument();
+      screen.queryByRole('link', { name: 'Edit Fall CS 101' }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(signOutUser).toHaveBeenCalledOnce());
@@ -97,6 +121,22 @@ describe('authentication', () => {
 
   it('redirects a guest away from an edit URL', async () => {
     vi.mocked(useAuthState).mockReturnValue({ user: null, loading: false });
+    renderApp(['/courses/F101/edit']);
+
+    expect(
+      await screen.findByText('Computer Science Courses'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'Course title' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('redirects a signed-in non-administrator away from an edit URL', async () => {
+    vi.mocked(useAdminStatus).mockReturnValue({
+      isAdmin: false,
+      loading: false,
+      error: null,
+    });
     renderApp(['/courses/F101/edit']);
 
     expect(

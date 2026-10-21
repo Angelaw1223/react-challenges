@@ -18,6 +18,7 @@ import {
   type Term,
 } from './types/course';
 import { hasCourseConflict } from './utilities/timeConflicts';
+import useAdminStatus from './utilities/useAdminStatus';
 import useAuthState from './utilities/useAuthState';
 import useFirestoreDocument from './utilities/useFirestoreDocument';
 
@@ -447,20 +448,24 @@ const CourseEditor = ({ courseId, course }: CourseEditorProps) => {
 
 type CourseFormProps = {
   courses: Record<string, Course>;
-  user: User | null;
-  authLoading: boolean;
+  canEdit: boolean;
+  authorizationLoading: boolean;
 };
 
-const CourseForm = ({ courses, user, authLoading }: CourseFormProps) => {
+const CourseForm = ({
+  courses,
+  canEdit,
+  authorizationLoading,
+}: CourseFormProps) => {
   const { courseId } = useParams();
   const navigate = useNavigate();
   const course = courseId === undefined ? undefined : courses[courseId];
 
-  if (authLoading) {
-    return <main className="p-4 font-sans">Checking sign-in...</main>;
+  if (authorizationLoading) {
+    return <main className="p-4 font-sans">Checking editing permission...</main>;
   }
 
-  if (!user) {
+  if (!canEdit) {
     return <Navigate to="/" replace />;
   }
 
@@ -485,9 +490,11 @@ const CourseForm = ({ courses, user, authLoading }: CourseFormProps) => {
 type BannerProps = {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
+  permissionError: Error | null;
 };
 
-const Banner = ({ user, loading }: BannerProps) => {
+const Banner = ({ user, loading, isAdmin, permissionError }: BannerProps) => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
 
@@ -517,7 +524,7 @@ const Banner = ({ user, loading }: BannerProps) => {
           {loading
             ? 'Checking sign-in...'
             : user
-              ? `Welcome, ${user.displayName ?? user.email ?? 'user'}`
+              ? `Welcome, ${user.displayName ?? user.email ?? 'user'}${isAdmin ? ' (Administrator)' : ''}`
               : 'Welcome, guest'}
         </p>
         <button
@@ -534,19 +541,40 @@ const Banner = ({ user, loading }: BannerProps) => {
           Unable to change sign-in: {authError}
         </p>
       )}
+      {permissionError && (
+        <p role="alert" className="mx-auto mt-2 max-w-7xl text-sm text-red-700">
+          Unable to check editing permission: {permissionError.message}
+        </p>
+      )}
     </header>
   );
 };
 
 const App = () => {
   const { user, loading: authLoading } = useAuthState();
+  const {
+    isAdmin,
+    loading: adminLoading,
+    error: adminError,
+  } = useAdminStatus(user);
   const { data: schedule, loading, error } =
     useFirestoreDocument<Schedule>('schedules/CS-2018-2019');
+  const authorizationLoading = authLoading || adminLoading;
+  const canEdit = Boolean(user) && isAdmin;
+
+  const banner = (
+    <Banner
+      user={user}
+      loading={authLoading}
+      isAdmin={isAdmin}
+      permissionError={adminError}
+    />
+  );
 
   if (loading) {
     return (
       <>
-        <Banner user={user} loading={authLoading} />
+        {banner}
         <main className="p-4 font-sans">Loading courses...</main>
       </>
     );
@@ -555,7 +583,7 @@ const App = () => {
   if (error) {
     return (
       <>
-        <Banner user={user} loading={authLoading} />
+        {banner}
         <main className="p-4 font-sans">
           Unable to load courses: {error.message}
         </main>
@@ -566,7 +594,7 @@ const App = () => {
   if (!schedule) {
     return (
       <>
-        <Banner user={user} loading={authLoading} />
+        {banner}
         <main className="p-4 font-sans">Course schedule not found.</main>
       </>
     );
@@ -574,19 +602,19 @@ const App = () => {
 
   return (
     <>
-      <Banner user={user} loading={authLoading} />
+      {banner}
       <Routes>
         <Route
           path="/"
-          element={<TermPage schedule={schedule} canEdit={Boolean(user)} />}
+          element={<TermPage schedule={schedule} canEdit={canEdit} />}
         />
         <Route
           path="/courses/:courseId/edit"
           element={
             <CourseForm
               courses={schedule.courses}
-              user={user}
-              authLoading={authLoading}
+              canEdit={canEdit}
+              authorizationLoading={authorizationLoading}
             />
           }
         />
